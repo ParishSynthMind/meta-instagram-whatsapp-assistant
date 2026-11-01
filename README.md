@@ -95,7 +95,7 @@ Checked against Meta's developer docs in November 2026:
 
 ## Status
 
-- **41 unit and integration tests pass** (Graph API and Claude mocked), on Python 3.11 and 3.12 in GitHub Actions.
+- **41 unit and integration tests pass** (Graph API and Claude mocked), run locally on Python 3.12.
 - **Tested live on 1 November 2026, Claude side:** the dry run with real Claude (Sonnet 5.5) answered the location, hours and services questions from the business profile, handed the price question and the booking request to a person, and the keyword and outbound checks behaved as listed above. One real fix came out of it: the first version of the price rule also blocked harmless lines like "prices are on the menu", so it now needs an actual number.
 - **Tested live on 1 November 2026, network side:** the server ran behind a Cloudflare quick tunnel and was hit over public HTTPS: verification handshake (`200` with the right token, `403` with a wrong one), a forged POST (`403`), and signed WhatsApp and Instagram payloads (`200`, real Claude replies in the log, `DRY_RUN` so nothing went to Meta).
 - **Not yet run against Meta's live Graph API.** The Meta developer app, the WhatsApp test number and the Instagram professional account were still being set up when this was published. The Graph API calls are built to Meta's documented request shapes and covered by mocked tests, but they haven't sent a real message yet. This section will be updated with the live result.
@@ -103,7 +103,7 @@ Checked against Meta's developer docs in November 2026:
 
 ## Stack
 
-Python · FastAPI · Meta Graph API v26.0 (Instagram API with Instagram Login, WhatsApp Cloud API, webhooks) · Anthropic Claude API (structured outputs) · SQLite · pytest · GitHub Actions
+Python · FastAPI · Meta Graph API v26.0 (Instagram API with Instagram Login, WhatsApp Cloud API, webhooks) · Anthropic Claude API (structured outputs) · SQLite · pytest
 
 ---
 Part of a small portfolio of tested automation/AI builds; see [ParishSynthMind](https://github.com/ParishSynthMind) for the others.
