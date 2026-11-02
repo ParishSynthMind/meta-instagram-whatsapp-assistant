@@ -100,7 +100,12 @@ Checked against Meta's developer docs in November 2026:
 - **41 unit and integration tests pass** (Graph API and Claude mocked), locally and in GitHub Actions on Python 3.11 and 3.12, which also runs the offline dry run.
 - **Tested live on 1 November 2026, Claude side:** the dry run with real Claude (Sonnet 5.5) answered the location, hours and services questions from the business profile, handed the price question and the booking request to a person, and the keyword and outbound checks behaved as listed above. One real fix came out of it: the first version of the price rule also blocked harmless lines like "prices are on the menu", so it now needs an actual number.
 - **Tested live on 1 November 2026, network side:** the server ran behind a Cloudflare quick tunnel and was hit over public HTTPS: verification handshake (`200` with the right token, `403` with a wrong one), a forged POST (`403`), and signed WhatsApp and Instagram payloads (`200`, real Claude replies in the log, `DRY_RUN` so nothing went to Meta).
-- **Not yet run against Meta's live Graph API.** The Meta developer app, the WhatsApp test number and the Instagram professional account were still being set up when this was published. The Graph API calls are built to Meta's documented request shapes and covered by mocked tests, but they haven't sent a real message yet. This section will be updated with the live result.
+- **Tested live on Meta's WhatsApp test number, 2 November 2026:** a real message sent from a phone to Meta's test number reached this server as a signed webhook from Meta (`200`), Claude answered it from the business profile ("Opening hours question answered from profile"), and the reply went out through the WhatsApp Cloud API and arrived on the phone. Meta's two delivery-status webhooks that followed were correctly ignored. One real setup lesson: the app must also be subscribed to the WhatsApp account itself (`POST /{waba-id}/subscribed_apps`), not only switched on in the dashboard, or Meta delivers nothing.
+![Live test on Meta's WhatsApp test number](media/live-meta-whatsapp-chat.png)
+
+*The real chat on a phone: the question at 11:20 got the reply from Claude, built only from the business profile. The earlier question at 11:18 got no reply because the app had not yet been attached to the WhatsApp account (see the lesson above).*
+
+- **Not tested against Meta live:** Instagram comments and DMs (Instagram professional account not set up) and WhatsApp on a real business number (needs Meta business verification and App Review).
 - Not covered: load, long-running hosting, Instagram story mentions and media (images, voice notes) beyond a polite "text only" reply.
 
 ## Stack
