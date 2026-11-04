@@ -38,6 +38,10 @@ class Settings:
     graph_version: str = "v26.0"
     instagram_account_id: str = ""     # your own IG professional account ID (to skip your own comments)
     instagram_access_token: str = ""
+    # Instagram Login apps use graph.instagram.com and /me; newer apps (Facebook Login / Unified login)
+    # use graph.facebook.com with a Page token and send DMs from /{page-id}/messages.
+    instagram_graph_host: str = "graph.instagram.com"
+    instagram_send_id: str = "me"
     whatsapp_phone_number_id: str = ""
     whatsapp_access_token: str = ""
     whatsapp_allowed_numbers: set[str] = field(default_factory=set)  # empty = anyone may message
@@ -81,6 +85,8 @@ class Settings:
             graph_version=e("GRAPH_API_VERSION", "v26.0"),
             instagram_account_id=e("INSTAGRAM_ACCOUNT_ID", ""),
             instagram_access_token=e("INSTAGRAM_ACCESS_TOKEN", ""),
+            instagram_graph_host=e("INSTAGRAM_GRAPH_HOST", "graph.instagram.com"),
+            instagram_send_id=e("INSTAGRAM_SEND_ID", "me"),
             whatsapp_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
             whatsapp_access_token=e("WHATSAPP_ACCESS_TOKEN", ""),
             whatsapp_allowed_numbers={n.lstrip("+") for n in _csv("WHATSAPP_ALLOWED_NUMBERS")},

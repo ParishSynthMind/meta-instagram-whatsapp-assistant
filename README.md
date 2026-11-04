@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/ParishSynthMind/meta-instagram-whatsapp-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/ParishSynthMind/meta-instagram-whatsapp-assistant/actions/workflows/tests.yml)
 
-A webhook service that answers Instagram comments, Instagram DMs and WhatsApp messages for a small business using Claude, behind hard guardrails: no prices, no promises, a hand-over to a real person on the right keywords, rate limits, and a log of every reply. WhatsApp runs on Meta's own **WhatsApp Cloud API**, so no Twilio or other middleman is needed.
+A webhook service that answers Instagram comments, Instagram DMs and WhatsApp messages for a small business using Claude, behind hard guardrails: no prices, no promises, a hand-over to a real person on the right keywords, rate limits, and a log of every reply. WhatsApp runs on Meta's own **WhatsApp Cloud API**, so no Twilio or other middleman is needed. It also takes **Facebook Lead Ads** leads: the moment someone fills in a lead form, the answers are fetched and stored.
 
 ![Dry run with live Claude replies](media/dry-run-live-claude.png)
 
@@ -60,7 +60,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python dry_run.py --offline     # whole pipeline on samples/, canned AI step, no keys needed
 export ANTHROPIC_API_KEY=...    # optional
 python dry_run.py               # same, with real Claude replies
-pytest                          # 41 tests, Graph API and Claude mocked
+pytest                          # 47 tests, Graph API and Claude mocked
 ```
 
 The dry run signs each sample the way Meta does, posts it to the real FastAPI app, prints the guardrail decision and the Graph API call it would make, replays a delivery to show the dedupe, and sends one forged request to show the `403`.
@@ -73,7 +73,7 @@ cp .env.example .env            # fill in secrets and IDs (see META-SETUP.md)
 cloudflared tunnel --url http://127.0.0.1:8000   # or any HTTPS host / reverse proxy
 ```
 
-Then in the Meta App Dashboard set the callback URLs to `https://<public-url>/webhooks/whatsapp` and `https://<public-url>/webhooks/instagram`, with the same verify token as `META_VERIFY_TOKEN`, and subscribe to the `messages` field (WhatsApp) and the `comments` and `messages` fields (Instagram). [META-SETUP.md](META-SETUP.md) has the step-by-step version. `tools/send_signed_webhook.py` signs a sample with your secret and posts it to any URL, for testing a deployed endpoint.
+Then in the Meta App Dashboard set the callback URLs to `https://<public-url>/webhooks/whatsapp` and `https://<public-url>/webhooks/instagram`, with the same verify token as `META_VERIFY_TOKEN`, and subscribe to the `messages` field (WhatsApp) and the `comments` and `messages` fields (Instagram). For Lead Ads, subscribe the **Page** object (field `leadgen`) to `https://<public-url>/webhooks/leads` and set `PAGE_ACCESS_TOKEN`. [META-SETUP.md](META-SETUP.md) has the step-by-step version. `tools/send_signed_webhook.py` signs a sample with your secret and posts it to any URL, for testing a deployed endpoint.
 
 Set `DRY_RUN=true` to run the whole thing live but only log what it would send.
 
@@ -97,7 +97,7 @@ Checked against Meta's developer docs in November 2026:
 
 ## Status
 
-- **41 unit and integration tests pass** (Graph API and Claude mocked), locally and in GitHub Actions on Python 3.11 and 3.12, which also runs the offline dry run.
+- **47 unit and integration tests pass** (Graph API and Claude mocked), locally and in GitHub Actions on Python 3.11 and 3.12, which also runs the offline dry run.
 - **Tested live on 1 November 2026, Claude side:** the dry run with real Claude (Sonnet 5.5) answered the location, hours and services questions from the business profile, handed the price question and the booking request to a person, and the keyword and outbound checks behaved as listed above. One real fix came out of it: the first version of the price rule also blocked harmless lines like "prices are on the menu", so it now needs an actual number.
 - **Tested live on 1 November 2026, network side:** the server ran behind a Cloudflare quick tunnel and was hit over public HTTPS: verification handshake (`200` with the right token, `403` with a wrong one), a forged POST (`403`), and signed WhatsApp and Instagram payloads (`200`, real Claude replies in the log, `DRY_RUN` so nothing went to Meta).
 - **Tested live on Meta's WhatsApp test number, 2 November 2026:** a real message sent from a phone to Meta's test number reached this server as a signed webhook from Meta (`200`), Claude answered it from the business profile ("Opening hours question answered from profile"), and the reply went out through the WhatsApp Cloud API and arrived on the phone. Meta's two delivery-status webhooks that followed were correctly ignored. One real setup lesson: the app must also be subscribed to the WhatsApp account itself (`POST /{waba-id}/subscribed_apps`), not only switched on in the dashboard, or Meta delivers nothing.
@@ -105,12 +105,17 @@ Checked against Meta's developer docs in November 2026:
 
 *The real chat on a phone: the question at 11:20 got the reply from Claude, built only from the business profile. The earlier question at 11:18 got no reply because the app had not yet been attached to the WhatsApp account (see the lesson above).*
 
-- **Not tested against Meta live:** Instagram comments and DMs (Instagram professional account not set up) and WhatsApp on a real business number (needs Meta business verification and App Review).
+- **Facebook Lead Ads, tested live on 4 November 2026:** on a real Facebook Page, the app's `page` webhook (field `leadgen`) was registered through the Graph API and Meta's own servers verified the callback (`200`). A lead form was created on the Page and Meta's **Lead Ads Testing Tool** made a real test lead. Meta holds back leadgen webhooks until an app is set to Live, so the delivery itself was replayed with Meta's exact payload and signature; from there everything ran against Meta for real: the service fetched the lead's answers from the Graph API with the Page token and stored them (`status: captured`, name and email fields).
+
+![Facebook Lead Ads test lead fetched from Meta](media/live-meta-lead-ads.png)
+
+- **Not tested against Meta live:** Instagram comments and DMs (needs an Instagram professional account linked to a Page; the webhook subscription is registered and verified by Meta), leadgen webhooks sent by Meta itself (only for Live apps), and WhatsApp on a real business number. Going beyond test accounts needs Meta **App Review**: Advanced Access for Instagram messages and comments, `leads_retrieval` for Pages you don't run, and business verification plus a payment method for WhatsApp.
+- **Note for newer Meta apps:** "API setup with Instagram login" is no longer offered to new apps; they get Facebook Login (or Unified login) instead. Set `INSTAGRAM_GRAPH_HOST=graph.facebook.com` and `INSTAGRAM_SEND_ID=<page-id>` and use a Page token; both routes are covered by tests.
 - Not covered: load, long-running hosting, Instagram story mentions and media (images, voice notes) beyond a polite "text only" reply.
 
 ## Stack
 
-Python · FastAPI · Meta Graph API v26.0 (Instagram API with Instagram Login, WhatsApp Cloud API, webhooks) · Anthropic Claude API (structured outputs) · SQLite · pytest · GitHub Actions
+Python · FastAPI · Meta Graph API v26.0 (Instagram API, WhatsApp Cloud API, Lead Ads, webhooks) · Anthropic Claude API (structured outputs) · SQLite · pytest · GitHub Actions
 
 ---
 Part of a small portfolio of tested automation/AI builds; see [ParishSynthMind](https://github.com/ParishSynthMind) for the others.

@@ -1,8 +1,8 @@
 """Thin Graph API client for the four calls this service makes.
 
-Instagram (Instagram API with Instagram Login, graph.instagram.com):
+Instagram (Instagram Login: graph.instagram.com; Facebook Login: graph.facebook.com + Page token):
   POST /{comment-id}/replies        public reply under a comment
-  POST /me/messages                 DM to an Instagram-scoped user ID
+  POST /me/messages                 DM to an Instagram-scoped user ID (/{page-id}/messages on Facebook Login)
 WhatsApp Cloud API (graph.facebook.com):
   POST /{phone-number-id}/messages  text message, and the "read" receipt
 Facebook Lead Ads (graph.facebook.com):
@@ -45,11 +45,11 @@ class MetaClient:
         return resp.json()
 
     def reply_to_comment(self, comment_id: str, text: str) -> dict:
-        url = f"https://graph.instagram.com/{self.s.graph_version}/{comment_id}/replies"
+        url = f"https://{self.s.instagram_graph_host}/{self.s.graph_version}/{comment_id}/replies"
         return self._post(url, self.s.instagram_access_token, data={"message": text})
 
     def send_instagram_dm(self, igsid: str, text: str) -> dict:
-        url = f"https://graph.instagram.com/{self.s.graph_version}/me/messages"
+        url = f"https://{self.s.instagram_graph_host}/{self.s.graph_version}/{self.s.instagram_send_id}/messages"
         return self._post(url, self.s.instagram_access_token,
                           json={"recipient": {"id": igsid}, "message": {"text": text}})
 

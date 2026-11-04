@@ -456,3 +456,16 @@ def test_meta_client_get_lead_uses_page_token():
     client = MetaClient(s, httpx.Client(transport=httpx.MockTransport(handler)))
     assert client.get_lead("300000000000003")["form_id"] == "200000000000002"
     assert seen["auth"] == "Bearer page-token" and "field_data" in seen["fields"]
+
+
+def test_instagram_dm_on_facebook_login_route():
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"message_id": "m1"})
+
+    s = Settings(instagram_access_token="page-token", instagram_graph_host="graph.facebook.com",
+                 instagram_send_id="1357681027436530")
+    MetaClient(s, httpx.Client(transport=httpx.MockTransport(handler))).send_instagram_dm("123", "hi")
+    assert seen["url"] == "https://graph.facebook.com/v26.0/1357681027436530/messages"
