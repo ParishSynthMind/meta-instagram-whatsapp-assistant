@@ -1,7 +1,7 @@
 """FastAPI webhook receiver.
 
-  GET  /webhooks/instagram  and  /webhooks/whatsapp   Meta's verification handshake
-  POST /webhooks/instagram  and  /webhooks/whatsapp   signed event deliveries
+  GET  /webhooks/{instagram,whatsapp,leads}   Meta's verification handshake
+  POST /webhooks/{instagram,whatsapp,leads}   signed event deliveries (leads = Page 'leadgen')
   GET  /health
 
 Each POST is checked against X-Hub-Signature-256 before anything is parsed,
@@ -19,7 +19,7 @@ from .handlers import Assistant
 from .signature import is_valid_signature
 
 MAX_BODY = 1_000_000
-EXPECTED_OBJECT = {"instagram": "instagram", "whatsapp": "whatsapp_business_account"}
+EXPECTED_OBJECT = {"instagram": "instagram", "whatsapp": "whatsapp_business_account", "leads": "page"}
 
 log = logging.getLogger("meta_assistant")
 
@@ -29,7 +29,7 @@ def build_assistant(settings: Settings) -> Assistant:
     from .meta_api import MetaClient
     from .store import Store
 
-    store = Store(settings.db_path, settings.reply_log_path)
+    store = Store(settings.db_path, settings.reply_log_path, lead_log_path=settings.lead_log_path)
     return Assistant(settings, store, AnthropicReplier(settings.model), MetaClient(settings))
 
 
@@ -43,7 +43,8 @@ def create_app(settings: Settings | None = None, assistant: Assistant | None = N
         return settings.instagram_secret if product == "instagram" else settings.meta_app_secret
 
     def enabled(product: str) -> bool:
-        return settings.enable_instagram if product == "instagram" else settings.enable_whatsapp
+        return {"instagram": settings.enable_instagram, "whatsapp": settings.enable_whatsapp,
+                "leads": settings.enable_leads}[product]
 
     @app.get("/webhooks/{product}")
     async def verify(product: str, request: Request):

@@ -5,6 +5,8 @@ Instagram (Instagram API with Instagram Login, graph.instagram.com):
   POST /me/messages                 DM to an Instagram-scoped user ID
 WhatsApp Cloud API (graph.facebook.com):
   POST /{phone-number-id}/messages  text message, and the "read" receipt
+Facebook Lead Ads (graph.facebook.com):
+  GET  /{leadgen-id}                the form answers behind a leadgen webhook
 """
 import httpx
 
@@ -27,6 +29,19 @@ class MetaClient:
             except Exception:
                 detail = resp.text[:300]
             raise MetaAPIError(f"Graph API {resp.status_code} on {url.split('?')[0]}: {detail}")
+        return resp.json()
+
+    def get_lead(self, leadgen_id: str) -> dict:
+        url = f"https://graph.facebook.com/{self.s.graph_version}/{leadgen_id}"
+        resp = self.http.get(url, params={"fields": "id,created_time,form_id,ad_id,field_data"},
+                             headers={"Authorization": f"Bearer {self.s.page_access_token}"})
+        if resp.status_code >= 300:
+            try:
+                err = resp.json().get("error", {})
+                detail = f"{err.get('code')} {err.get('type')}: {err.get('message')}"
+            except Exception:
+                detail = resp.text[:300]
+            raise MetaAPIError(f"Graph API {resp.status_code} on lead {leadgen_id}: {detail}")
         return resp.json()
 
     def reply_to_comment(self, comment_id: str, text: str) -> dict:
@@ -60,15 +75,20 @@ class MetaClient:
 class RecordingMetaClient:
     """Stands in for MetaClient in dry runs and tests: records every call, sends nothing."""
 
-    def __init__(self, fail_on: set[str] | None = None):
+    def __init__(self, fail_on: set[str] | None = None, leads: dict | None = None):
         self.calls: list[tuple] = []
         self.fail_on = fail_on or set()
+        self.leads = leads or {}
 
     def _record(self, name: str, *args) -> dict:
         self.calls.append((name, *args))
         if name in self.fail_on:
             raise MetaAPIError(f"simulated failure in {name}")
         return {"recorded": True}
+
+    def get_lead(self, leadgen_id):
+        self._record("get_lead", leadgen_id)
+        return self.leads.get(leadgen_id, {"id": leadgen_id, "field_data": []})
 
     def reply_to_comment(self, comment_id, text):
         return self._record("reply_to_comment", comment_id, text)

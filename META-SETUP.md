@@ -26,10 +26,19 @@ What you need before starting: a Facebook account, an Instagram account switched
 5. **Configure webhooks:** callback `https://<public-url>/webhooks/instagram`, same verify token, then subscribe to **comments** and **messages**.
 6. In the Instagram app, **Settings > Messages and story replies > Message controls > Connected tools**, turn on **Allow access to messages**.
 
-## 4. What works in test mode, and what needs App Review
+## 4. Facebook Lead Ads (optional)
+
+1. In the developer app, add the use case **"Capture and manage ad leads with Marketing API"** (or add the permissions `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads` in the Graph API Explorer).
+2. In the **Graph API Explorer**, pick the app, choose **Get Page Access Token** for the Page that owns the lead form, and copy it into `PAGE_ACCESS_TOKEN`.
+3. Subscribe the app to the Page: `POST /{page-id}/subscribed_apps?subscribed_fields=leadgen` with that Page token. Like WhatsApp's `subscribed_apps`, the dashboard toggle alone is not enough.
+4. In the app's **Webhooks** settings, pick the **Page** object, callback `https://<public-url>/webhooks/leads`, same verify token, and subscribe to **leadgen**.
+5. Make a lead form on the Page (**Meta Business Suite > All tools > Instant Forms**; no ad or spend is needed), then open Meta's **Lead Ads Testing Tool** (developers.facebook.com/tools/lead-ads-testing), pick the Page and form, and press **Create lead**. The service fetches the answers and stores them in `data/leads.jsonl` and the `leads` table.
+
+## 5. What works in test mode, and what needs App Review
 
 | Works now, in development mode | Needs Meta App Review (takes days) |
 |---|---|
 | WhatsApp replies to up to 5 verified numbers via the test number | WhatsApp on a real business number for any customer (also needs business verification and a payment method) |
 | Instagram DM replies to accounts that have a role on the app (admin, developer, tester) | Instagram DMs from the general public (Advanced Access to `instagram_business_manage_messages`) |
+| Lead Ads test leads from Meta's Lead Ads Testing Tool, on a Page you admin | Leads from real ads on Pages you don't admin (Advanced Access to `leads_retrieval`) |
 | Webhook verification and Meta's built-in **Test** button for each field | Comment webhooks at all (Advanced Access to `instagram_business_manage_comments`, app set to Live, public account) |

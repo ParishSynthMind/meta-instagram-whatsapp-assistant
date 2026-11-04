@@ -41,10 +41,12 @@ class Settings:
     whatsapp_phone_number_id: str = ""
     whatsapp_access_token: str = ""
     whatsapp_allowed_numbers: set[str] = field(default_factory=set)  # empty = anyone may message
+    page_access_token: str = ""        # Facebook Page token with leads_retrieval, for Lead Ads
 
     # Behaviour
     enable_instagram: bool = True
     enable_whatsapp: bool = True
+    enable_leads: bool = True
     reply_to_comments: bool = True
     dry_run: bool = False              # log what would be sent, never call the Graph API
     model: str = "claude-sonnet-5-5"
@@ -59,6 +61,7 @@ class Settings:
     # Storage
     db_path: str = "data/assistant.db"
     reply_log_path: str = "data/reply-log.jsonl"
+    lead_log_path: str = "data/leads.jsonl"
 
     @property
     def instagram_secret(self) -> str:
@@ -81,8 +84,10 @@ class Settings:
             whatsapp_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
             whatsapp_access_token=e("WHATSAPP_ACCESS_TOKEN", ""),
             whatsapp_allowed_numbers={n.lstrip("+") for n in _csv("WHATSAPP_ALLOWED_NUMBERS")},
+            page_access_token=e("PAGE_ACCESS_TOKEN", ""),
             enable_instagram=_bool("ENABLE_INSTAGRAM", True),
             enable_whatsapp=_bool("ENABLE_WHATSAPP", True),
+            enable_leads=_bool("ENABLE_LEADS", True),
             reply_to_comments=_bool("REPLY_TO_COMMENTS", True),
             dry_run=_bool("DRY_RUN", False),
             model=e("CLAUDE_MODEL", "claude-sonnet-5-5"),
@@ -95,4 +100,5 @@ class Settings:
             history_turns=int(e("HISTORY_TURNS", "10")),
             db_path=e("DB_PATH", "data/assistant.db"),
             reply_log_path=e("REPLY_LOG_PATH", "data/reply-log.jsonl"),
+            lead_log_path=e("LEAD_LOG_PATH", "data/leads.jsonl"),
         )

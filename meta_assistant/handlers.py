@@ -82,6 +82,20 @@ def parse_whatsapp(payload: dict) -> tuple[list[Event], list[str]]:
     return events, skipped
 
 
+def parse_leadgen(payload: dict) -> tuple[list[dict], list[str]]:
+    """Facebook Page 'leadgen' changes. The webhook only carries IDs; the answers are fetched after."""
+    leads, skipped = [], []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            if change.get("field") != "leadgen":
+                skipped.append(f"ignored page field {change.get('field')}")
+                continue
+            v = change.get("value", {})
+            leads.append({"leadgen_id": str(v.get("leadgen_id", "")), "page_id": str(v.get("page_id", entry.get("id", ""))),
+                          "form_id": str(v.get("form_id", "")), "ad_id": str(v.get("ad_id") or "")})
+    return leads, skipped
+
+
 class Assistant:
     def __init__(self, settings, store, replier: Replier, meta, alert=None, clock=time.time):
         self.s = settings
@@ -93,6 +107,8 @@ class Assistant:
 
     # Entry point from the webhook ------------------------------------------
     def process_payload(self, product: str, payload: dict) -> list[dict]:
+        if product == "leads":
+            return self.process_leads(payload)
         if product == "instagram":
             events, skipped = parse_instagram(payload, self.s.instagram_account_id)
         else:
@@ -106,6 +122,30 @@ class Assistant:
             except Exception as exc:  # never let one bad event break the batch
                 log.exception("unhandled error on %s", event.event_id)
                 results.append(self._log(event, "", "error", f"unhandled: {exc}"))
+        return results
+
+    def process_leads(self, payload: dict) -> list[dict]:
+        found, skipped = parse_leadgen(payload)
+        for reason in skipped:
+            log.info("skipped: %s", reason)
+        results = []
+        for lead in found:
+            if not lead["leadgen_id"] or not self.store.claim_event(f"lead:{lead['leadgen_id']}", "lead"):
+                results.append({**lead, "status": "duplicate"})
+                continue
+            try:
+                data = self.meta.get_lead(lead["leadgen_id"])
+            except Exception as exc:
+                # Kept with its IDs so it can be fetched again later; never a 5xx back to Meta.
+                results.append(self.store.save_lead(**lead, created_time="", fields={}, status="fetch_failed",
+                                                    error=str(exc)))
+                log.warning("lead %s fetch failed: %s", lead["leadgen_id"], exc)
+                continue
+            fields = {f.get("name", ""): ", ".join(f.get("values", [])) for f in data.get("field_data", [])}
+            row = self.store.save_lead(**{**lead, "form_id": str(data.get("form_id") or lead["form_id"])},
+                                       created_time=data.get("created_time", ""), fields=fields, status="captured")
+            log.info("lead %s captured from form %s (%d fields)", lead["leadgen_id"], row["form_id"], len(fields))
+            results.append(row)
         return results
 
     # One event ---------------------------------------------------------------

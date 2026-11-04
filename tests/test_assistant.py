@@ -393,3 +393,66 @@ def test_meta_client_error_is_readable_and_has_no_token(settings):
     with pytest.raises(MetaAPIError) as exc:
         client.send_whatsapp_text("15550001111", "hi")
     assert "131030" in str(exc.value) and "secret-token-value" not in str(exc.value)
+
+
+# Lead Ads ------------------------------------------------------------------
+
+LEAD = {"id": "300000000000003", "created_time": "2026-11-04T10:00:00+0000", "form_id": "200000000000002",
+        "field_data": [{"name": "full_name", "values": ["Test Lead"]},
+                       {"name": "email", "values": ["test@example.com"]}]}
+
+
+def test_parse_leadgen_ignores_other_page_fields():
+    payload = sample("page_leadgen")
+    payload["entry"][0]["changes"].append({"field": "feed", "value": {}})
+    from meta_assistant.handlers import parse_leadgen
+    leads, skipped = parse_leadgen(payload)
+    assert [l["leadgen_id"] for l in leads] == ["300000000000003"]
+    assert skipped == ["ignored page field feed"]
+
+
+def test_lead_is_fetched_stored_and_deduped(settings):
+    meta = RecordingMetaClient(leads={"300000000000003": LEAD})
+    a, store, replier, _ = make(settings, meta=meta)
+    first = a.process_payload("leads", sample("page_leadgen"))
+    again = a.process_payload("leads", sample("page_leadgen"))
+    assert first[0]["status"] == "captured"
+    assert first[0]["fields"] == {"full_name": "Test Lead", "email": "test@example.com"}
+    assert again[0]["status"] == "duplicate"
+    assert [c[0] for c in meta.calls] == ["get_lead"]
+    assert replier.calls == []          # leads never go to the model
+    assert store.all_leads()[0]["fields"]["email"] == "test@example.com"
+
+
+def test_lead_fetch_failure_is_kept_not_raised(settings):
+    a, store, _, _ = make(settings, meta=RecordingMetaClient(fail_on={"get_lead"}))
+    out = a.process_payload("leads", sample("page_leadgen"))
+    assert out[0]["status"] == "fetch_failed" and "simulated failure" in out[0]["error"]
+    assert store.all_leads()[0]["leadgen_id"] == "300000000000003"
+
+
+def test_lead_webhook_signature_and_object(settings):
+    meta = RecordingMetaClient(leads={"300000000000003": LEAD})
+    a, store, _, _ = make(settings, meta=meta)
+    client = TestClient(create_app(settings, a))
+    raw = json.dumps(sample("page_leadgen")).encode()
+    assert client.post("/webhooks/leads", content=raw, headers={"X-Hub-Signature-256": "sha256=bad"}).status_code == 403
+    ok = client.post("/webhooks/leads", content=raw, headers={"X-Hub-Signature-256": compute_signature(SECRET, raw)})
+    assert ok.status_code == 200
+    assert store.all_leads()[0]["status"] == "captured"
+    assert client.get("/webhooks/leads", params={"hub.mode": "subscribe", "hub.verify_token": "verify-me",
+                                                  "hub.challenge": "42"}).text == "42"
+
+
+def test_meta_client_get_lead_uses_page_token():
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers["Authorization"]
+        seen["fields"] = request.url.params["fields"]
+        return httpx.Response(200, json=LEAD)
+
+    s = Settings(page_access_token="page-token")
+    client = MetaClient(s, httpx.Client(transport=httpx.MockTransport(handler)))
+    assert client.get_lead("300000000000003")["form_id"] == "200000000000002"
+    assert seen["auth"] == "Bearer page-token" and "field_data" in seen["fields"]
